@@ -1,13 +1,14 @@
 const express = require('express'),
     { createLogger, format, transports } = require('winston'),
-    { combine, timestamp, prettyPrint } = format;
+    { combine, timestamp, prettyPrint } = format,
+    { check, validationResult } = require('express-validator');
 const bodyParser = require('body-parser');
 const path = require('path');
 const mongoose = require('mongoose');
-const { check, validationResult } = require('express-validator');
+const config = require('./config/config');
 
 const app = express(),
-    port = 4500;
+    port = config.PORT;
 
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
@@ -15,6 +16,7 @@ app.use(bodyParser.json());
 app.set('views', path.join(__dirname, 'views'));
 app.set('view engine', 'ejs');
 
+//logging module 
 const logger = createLogger({
     format: combine(
         timestamp(),
@@ -44,72 +46,87 @@ var UserSchema = new mongoose.Schema(
         'password': String
     }
 )
-var User = mongoose.model('User', UserSchema)
-
+var User = mongoose.model('user', UserSchema)
 
 app.get('/', (req, res) => {
-    res.render('signup');
+    res.render('signup', { message: 'signup page', status: 2 });
     logger.info("Sign Up page rendering");
 })
 
+app.get('/signup', (req, res) => {
+    res.render('signup', { message: 'signup page', status: 2 });
+    logger.info("Sign Up page rendering");
+})
+
+
 app.post('/signup',
-    //===========================validation starts ==========================
     [
         check('firstname')
-            .notEmpty().withMessage('Name cannot be empty'),
+            .notEmpty().withMessage('Name cannot be empty.')
+            .isAlpha().withMessage('Firstname must be in String Only.'),
         check('lastname')
-            .notEmpty().withMessage('Name cannot be empty'),
+            .notEmpty().withMessage('Name cannot be empty.')
+            .isAlpha().withMessage('Lastname must be in String Only.'),
         check('email', 'email is not valid')
             .isEmail().normalizeEmail(),
-        check('password', 'The password must be 5+ chars long and contain a number')
-            .not().isIn(['123', 'password', 'god']).withMessage('Do not use a common word as the password')
+        check('password', 'The password must be 5+ chars long and contain a number.')
+            .not().isIn(['123', 'password', 'god']).withMessage('Do not use a common word as the password.')
             .isLength({ min: 5 })
             .matches(/\d/)
     ], async (req, res) => {
         const errors = validationResult(req);
         if (!errors.isEmpty()) {
-            return res.status(422).json({ errors: errors.array() });
+            // return res.status(422).json({ errors: errors.array() });
+            let obj = errors.array();
+            let errStr = '';
+            obj.forEach(msg => {
+                errStr += msg.msg;
+            })
+            res.render('signup', { message: errStr, status: 0 })
         }
 
-        //=================validation ends ==================================
-
         let userExists = await checkUserExist(req.body.email);
-        console.log(userExists);
+        logger.info("userExists : " + userExists);
         if (!userExists) {
             let myData = new User(req.body);
             myData.save()
                 .then(item => {
-                    console.log("item :  === ", item);
-                    sendEmail(req.body.email, req.body.firstname);
-                    res.send("item saved to database");
+                    logger.info("Save item into database : " + item);
+                    sendEmail(item.email, item.firstname);
+                    res.render('signup', { message: "Signup Successful!", status: 1 });
                 })
                 .catch(err => {
-                    res.status(400).send("unable to save to database");
+                    logger.error("catch error : " + err)
+                    // res.status(400).send("unable to save to database");
+                    res.render('signup', { message: "Some technical error occured. Contact Admin.", status: 0 })
                 });
         } else {
-            res.send("User already exists.");
+            res.render('signup', { message: "User already exists", status: 0 });
         }
     })
 
 function revertModule(email) {
     User.deleteMany({ email: email }, function (err, obj) {
-        logger.log("Reverted " + obj.n + " entries form database")
+        logger.info("inside revert module : === result of delete query :  " + obj.n);
+        logger.error("inside revert module : === error of delete query : " + err);
     })
 }
 
 async function checkUserExist(email) {
     try {
         let response = await User.findOne({ email: email });
+        logger.info("User exists : " + email);
         if (response) {
             return true;
         }
         return false;
     } catch (e) {
-        console.log("error in cathc : ", e);
+        logger.error("UserExist in catch : " + e);
     }
 }
 
 function sendEmail(toEmail, firstname) {
+    logger.info("Inside sendEmail === Email assuming username : " + toEmail);
     var API_KEY = '8a4cd44754fb35a060c681ee3ff44dba-ed4dc7c4-02cba843';
     var DOMAIN = 'sandbox6facdd9cf25c4167b390b123189e4412.mailgun.org';
     var mailgun = require('mailgun-js')({ apiKey: API_KEY, domain: DOMAIN });
@@ -123,6 +140,7 @@ function sendEmail(toEmail, firstname) {
 
     mailgun.messages().send(data, (error, body) => {
         if (error) {
+            logger.error("Inside send === error from mailgun : " + error);
             revertModule(toEmail);
         }
     });

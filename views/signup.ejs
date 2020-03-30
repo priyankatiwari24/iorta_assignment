@@ -19,6 +19,17 @@
 
 <body>
     <h2 class='text-center mt-5'>Sign Up</h2>
+    
+        <%  if(status == 1) { %>
+            <p class="text-center text-success ">
+                <%= message %>    
+            </p>
+        <% } else if(status == 0) { %>
+            <p class="text-center text-danger">
+                <%= message %>    
+            </p>
+        <% } %>
+
     <div class="container col-md-5 mt-5 border " style="background-color: #eee;">
         <form action="/signup" class="mt-3" method="POST" name="registration">
             <div class="form-group">
@@ -47,22 +58,13 @@
 </body>
 
 <script>
-    // Wait for the DOM to be ready
     $(function () {
-        // Initialize form validation on the registration form.
-        // It has the name attribute "registration"
         $("form[name='registration']").validate({
-            // Specify validation rules
             rules: {
-                // The key name on the left side is the name attribute
-                // of an input field. Validation rules are defined
-                // on the right side
                 firstname: "required",
                 lastname: "required",
                 email: {
                     required: true,
-                    // Specify that email should be validated
-                    // by the built-in "email" rule
                     email: true
                 },
                 password: {
@@ -70,7 +72,6 @@
                     minlength: 5
                 }
             },
-            // Specify validation error messages
             messages: {
                 firstname: "Please enter your firstname",
                 lastname: "Please enter your lastname",
@@ -80,8 +81,6 @@
                 },
                 email: "Please enter a valid email address"
             },
-            // Make sure the form is submitted to the destination defined
-            // in the "action" attribute of the form when valid
             submitHandler: function (form) {
                 form.submit();
             }
