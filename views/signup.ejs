@@ -19,16 +19,16 @@
 
 <body>
     <h2 class='text-center mt-5'>Sign Up</h2>
-    
-        <%  if(status == 1) { %>
-            <p class="text-center text-success ">
-                <%= message %>    
-            </p>
-        <% } else if(status == 0) { %>
-            <p class="text-center text-danger">
-                <%= message %>    
-            </p>
-        <% } %>
+
+    <%  if(status == 1) { %>
+    <p class="text-center text-success error">
+        <%= message %>
+    </p>
+    <% } else if(status == 0) { %>
+    <p class="text-center text-danger error">
+        <%= message %>
+    </p>
+    <% } %>
 
     <div class="container col-md-5 mt-5 border " style="background-color: #eee;">
         <form action="/signup" class="mt-3" method="POST" name="registration">
@@ -82,10 +82,19 @@
                 email: "Please enter a valid email address"
             },
             submitHandler: function (form) {
+                e.preventDefault();
                 form.submit();
             }
         });
     });
 </script>
+
+<script>
+
+if(window.history.replaceState){
+    window.history.replaceState(null,null,window.location.href);
+}
+
+</script>    
 
 </html>

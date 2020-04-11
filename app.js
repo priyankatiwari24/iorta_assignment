@@ -7,6 +7,9 @@ const path = require('path');
 const mongoose = require('mongoose');
 const config = require('./config/config');
 
+const SparkPost = require('sparkpost');
+const client = new SparkPost('<API_KEY>');
+
 const app = express(),
     port = config.PORT;
 
@@ -34,7 +37,7 @@ mongoose.connect(url, {
 }).then(() => {
     console.log("Successfully connected to the database");
 }).catch(err => {
-    console.log('Could not connect to the database. Exiting now...', err);
+    logger.error('Could not connect to the database. Exiting now : ' + err)
     process.exit();
 });
 
@@ -67,37 +70,46 @@ app.post('/signup',
         check('lastname')
             .notEmpty().withMessage('Name cannot be empty.')
             .isAlpha().withMessage('Lastname must be in String Only.'),
-        check('email', 'email is not valid')
-            .isEmail().normalizeEmail(),
-        check('password', 'The password must be 5+ chars long and contain a number.')
-            .not().isIn(['123', 'password', 'god']).withMessage('Do not use a common word as the password.')
+        check('email')
+            .isEmail().normalizeEmail().withMessage('Email is not valid. '),
+        check('password')
+            .matches(/^(?=.*[A-Za-z])(?=.*\d)(?=.*[@$.!%*#?&])[A-Za-z\d@$.!%*#?&]{5,}$/)
+            .withMessage('Password should contain at least one letter, one number and one special character ')
+            .exists()
+            .withMessage('Password should not be empty ')
             .isLength({ min: 5 })
-            .matches(/\d/)
-    ], async (req, res) => {
+            .withMessage('Password should be minimum five characters ')
+            
+
+    ],
+    async (req, res) => {
         const errors = validationResult(req);
         if (!errors.isEmpty()) {
-            // return res.status(422).json({ errors: errors.array() });
             let obj = errors.array();
             let errStr = '';
             obj.forEach(msg => {
                 errStr += msg.msg;
             })
-            res.render('signup', { message: errStr, status: 0 })
+            res.render('signup', { message: errStr, status: 0 });
+            return false;
         }
 
         let userExists = await checkUserExist(req.body.email);
         logger.info("userExists : " + userExists);
         if (!userExists) {
             let myData = new User(req.body);
-            myData.save()
-                .then(item => {
-                    logger.info("Save item into database : " + item);
-                    sendEmail(item.email, item.firstname);
-                    res.render('signup', { message: "Signup Successful!", status: 1 });
+            await myData.save()
+                .then(async item => {
+                    logger.info("Save item into database");
+                    let s = await sendEmailSparkpost(item.email, item.firstname);
+                    if (s) {
+                        res.render('signup', { message: "Signup Successful!", status: 1 });
+                    } else {
+                        res.render('signup', { message: "Some technical error occured. Contact Admin.", status: 0 })
+                    }
                 })
                 .catch(err => {
                     logger.error("catch error : " + err)
-                    // res.status(400).send("unable to save to database");
                     res.render('signup', { message: "Some technical error occured. Contact Admin.", status: 0 })
                 });
         } else {
@@ -105,11 +117,13 @@ app.post('/signup',
         }
     })
 
-function revertModule(email) {
-    User.deleteMany({ email: email }, function (err, obj) {
-        logger.info("inside revert module : === result of delete query :  " + obj.n);
-        logger.error("inside revert module : === error of delete query : " + err);
-    })
+async function revertModule(email) {
+    try {
+        await User.deleteOne({ email: email });
+        return true;
+    } catch (e) {
+        return false;
+    }
 }
 
 async function checkUserExist(email) {
@@ -125,25 +139,33 @@ async function checkUserExist(email) {
     }
 }
 
-function sendEmail(toEmail, firstname) {
-    logger.info("Inside sendEmail === Email assuming username : " + toEmail);
-    var API_KEY = '8a4cd44754fb35a060c681ee3ff44dba-ed4dc7c4-02cba843';
-    var DOMAIN = 'sandbox6facdd9cf25c4167b390b123189e4412.mailgun.org';
-    var mailgun = require('mailgun-js')({ apiKey: API_KEY, domain: DOMAIN });
-
-    const data = {
-        from: 'Priyanka Upadhyay <me@sandbox6facdd9cf25c4167b390b123189e4412.mailgun.org>',
-        to: toEmail,
-        subject: 'Sign up successfully, Welcome!',
-        text: 'Hello ' + firstname + ',\n You have successfully signed up! \n Thanks!'
-    };
-
-    mailgun.messages().send(data, (error, body) => {
-        if (error) {
-            logger.error("Inside send === error from mailgun : " + error);
-            revertModule(toEmail);
+async function sendEmailSparkpost(toEmail, firstname) {
+    try {
+        await client.transmissions.send({
+            options: {
+                sandbox: false
+            },
+            content: {
+                from: '<FROM_EMAIL>',
+                subject: 'Sign up successfully, Welcome!',
+                html: `Hello ${firstname},\n You have successfully signed up! \n Thanks!`
+            },
+            recipients: [
+                { address: toEmail }
+            ]
+        })
+        logger.info("Email Success");
+        return true;
+    } catch (error) {
+        logger.error("Email Failed: " + error);
+        let revert = await revertModule(toEmail);
+        if (revert) {
+            logger.info("Revert Successfully");
+        } else {
+            logger.error("revert Failed ")
         }
-    });
+        return false;
+    }
 }
 
 app.listen(port, () => console.log(`app listening on port ${port}!`));
