@@ -5,10 +5,10 @@ Need to use Async nodejs for this task.
 Insert data in DB if there is no error while inserting.
 
 ## User Schema  
-First name 
-Last name 
-Email
-Password
+First name  
+Last name  
+Email  
+Password  
 Created date 
 
 ## Following is process which you need to finish in series and revert if there is any error while process going on  
