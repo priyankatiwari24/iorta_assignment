@@ -1,8 +1,8 @@
 # Step to run app.js
 
 ## Step 1: Clone Codebase
-```git clone https://github.com/priyankatiwari24/iorta_assignment.git```  
-```cd iorta_assignment/```
+```git clone https://github.com/priyankatiwari24/sendEmailWithRevertTransaction.git```  
+```cd sendEmailWithRevertTransaction/```
 
 ## Step 2: Install Dependency
 ```npm i```
